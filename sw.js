@@ -1,5 +1,4 @@
-const CACHE_NAME = "efcalc-v3";
-
+const CACHE_NAME = "efcalc-v4";
 // Add the files you want available offline.
 // If you don't have icon files yet, you can remove them from this list.
 const CORE_ASSETS = [
