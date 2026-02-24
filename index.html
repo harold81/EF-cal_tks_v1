@@ -15,11 +15,14 @@
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .small { font-size: 13px; color: #444; }
     .out { font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; background:#fafafa; padding: 12px; border-radius: 10px; border:1px solid #eee; }
+    .tag { display:inline-block; font-size:12px; padding:4px 8px; border-radius:999px; background:#f0f0f0; margin-right:6px; }
+    details summary { cursor:pointer; }
+    hr { border:none;border-top:1px solid #eee;margin:14px 0; }
   </style>
 </head>
 <body>
   <h2>Earth Fault Calculator</h2>
-  <div class="small">TT / TN-S • Fault current, touch voltage estimate, basic checks</div>
+  <div class="small">TT / TN-S • PVC Cu cable data from your Table 4D1A + 4D1B (70°C)</div>
 
   <div class="card">
     <label>Earthing system</label>
@@ -34,33 +37,122 @@
         <input id="u0" type="number" step="0.1" value="230">
       </div>
       <div>
-        <label>50V limit (V)</label>
+        <label>Touch voltage limit (V)</label>
         <input id="ulimit" type="number" step="0.1" value="50">
       </div>
     </div>
   </div>
 
+  <!-- TN-S -->
   <div class="card" id="tnsCard">
     <h3 style="margin:0 0 6px;">TN-S inputs</h3>
+
     <label>Ze (Ω) external loop impedance</label>
     <input id="ze" type="number" step="0.001" value="0.20">
 
     <div class="row">
       <div>
-        <label>R1 (Ω) line conductor</label>
-        <input id="r1" type="number" step="0.001" value="0.10">
+        <label>Circuit length L (m) one-way</label>
+        <input id="len" type="number" step="0.1" value="30">
       </div>
       <div>
-        <label>R2 (Ω) CPC/PE conductor</label>
-        <input id="r2" type="number" step="0.001" value="0.10">
+        <label>Circuit arrangement for Zs estimation (Table 4D1B)</label>
+        <select id="arrZs">
+          <option value="SP" selected>Single-phase a.c. (2 cables)</option>
+          <option value="TP">Three-phase a.c. (3 or 4 cables)</option>
+        </select>
       </div>
     </div>
 
-    <label>Ia (A) required trip current (MCB/CB setting)</label>
-    <input id="ia" type="number" step="0.1" value="250">
-    <div class="small">If unsure: for an MCB you’d normally derive Ia from its curve (B/C/D). This field lets you plug the correct Ia once known.</div>
+    <div class="row">
+      <div>
+        <label>Table 4D1B method (depends on arrangement)</label>
+        <select id="vdMethod"></select>
+      </div>
+      <div>
+        <label>Load current (A) for Iz check (optional)</label>
+        <input id="loadA" type="number" step="0.1" placeholder="e.g. 28">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Line conductor size (mm²)</label>
+        <select id="lineSize"></select>
+      </div>
+      <div>
+        <label>CPC / PE size (mm²)</label>
+        <select id="cpcSize"></select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Table 4D1A (Ref Method 1 clipped direct) arrangement</label>
+        <select id="ccaArrangement">
+          <option value="2CSP" selected>2 cables, single-phase a.c./d.c. (Table 4D1A col. 6)</option>
+          <option value="3C3P">3 or 4 cables, three-phase a.c. (Table 4D1A col. 7)</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
+
+    <div class="small" id="cableInfo">—</div>
+
+    <details style="margin-top:10px;">
+      <summary><span class="tag">Optional</span>Manual override (R1+R2) loop Ω</summary>
+      <label>Override (R1+R2) in Ω (leave blank to use Table 4D1B)</label>
+      <input id="loopOverride" type="number" step="0.0001" placeholder="auto from Table 4D1B">
+      <div class="small">If you measured Zs or (R1+R2) on site, override here.</div>
+    </details>
+
+    <hr>
+
+    <h3 style="margin:0 0 6px;">MCB instantaneous range</h3>
+    <div class="row">
+      <div>
+        <label>MCB curve type</label>
+        <select id="mcbType">
+          <option value="B">Type B (3–5×In)</option>
+          <option value="C" selected>Type C (5–10×In)</option>
+          <option value="D">Type D (10–20×In)</option>
+        </select>
+      </div>
+      <div>
+        <label>MCB rating In (A)</label>
+        <select id="mcbIn"></select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Use Ia for ADS check</label>
+        <select id="iaMode">
+          <option value="conservative" selected>Conservative (max multiplier × In)</option>
+          <option value="min">Optimistic (min multiplier × In)</option>
+          <option value="mid">Mid-band (average multiplier × In)</option>
+          <option value="custom">Custom Ia (A)</option>
+        </select>
+      </div>
+      <div>
+        <label>Custom Ia (A)</label>
+        <input id="iaCustom" type="number" step="0.1" value="250">
+      </div>
+    </div>
+
+    <div class="small" id="mcbInfo">—</div>
+
+    <details style="margin-top:10px;">
+      <summary><span class="tag">Notes</span>3-phase Zs estimation</summary>
+      <div class="small">
+        Table 4D1B 3-phase values are given for 3-phase voltage drop.
+        This calculator converts to a phase-conductor equivalent by dividing by √3, then forms a fault loop (Line + CPC).
+        This is a practical approximation for Zs when cables are installed as 3/4-core groupings.
+      </div>
+    </details>
   </div>
 
+  <!-- TT -->
   <div class="card" id="ttCard" style="display:none;">
     <h3 style="margin:0 0 6px;">TT inputs</h3>
     <label>RA (Ω) installation earth electrode resistance</label>
@@ -79,7 +171,7 @@
         <input id="zline" type="number" step="0.001" value="0.00">
       </div>
     </div>
-    <div class="small">TT fault current is often limited by RA (and RB). If you don’t know Zline, leave it at 0 for a rough estimate.</div>
+    <div class="small">TT protection is normally by RCD: check RA × IΔn ≤ touch voltage limit (often 50 V).</div>
   </div>
 
   <button id="calcBtn">Calculate</button>
@@ -90,20 +182,212 @@
   </div>
 
   <script>
-    // Register service worker (offline)
+    // Offline (service worker)
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(()=>{});
     }
 
     const $ = (id) => document.getElementById(id);
+    function n(v) { const x = Number(v); return Number.isFinite(x) ? x : NaN; }
+    function fmt(x, dp=3) { if (!Number.isFinite(x)) return "—"; return x.toFixed(dp); }
 
-    function n(v) {
-      const x = Number(v);
-      return Number.isFinite(x) ? x : NaN;
+    const SQRT3 = Math.sqrt(3);
+
+    // =========================
+    // TABLE 4D1B (your screenshot)
+    // z (impedance) mV/A/m
+    // =========================
+
+    // Single-phase a.c. (2 cables) → columns 3,4,5
+    const T4D1B_Z_SP = {
+      1:    { M34: 44.0,  M111: 44.0,  M12: 44.0 },
+      1.5:  { M34: 29.0,  M111: 29.0,  M12: 29.0 },
+      2.5:  { M34: 18.0,  M111: 18.0,  M12: 18.0 },
+      4:    { M34: 11.0,  M111: 11.0,  M12: 11.0 },
+      6:    { M34: 7.3,   M111: 7.3,   M12: 7.3 },
+      10:   { M34: 4.4,   M111: 4.4,   M12: 4.4 },
+      16:   { M34: 2.8,   M111: 2.8,   M12: 2.8 },
+
+      25:   { M34: 1.80,  M111: 1.75,  M12: 1.80 },
+      35:   { M34: 1.30,  M111: 1.25,  M12: 1.30 },
+      50:   { M34: 1.00,  M111: 0.95,  M12: 0.97 },
+      70:   { M34: 0.72,  M111: 0.66,  M12: 0.69 },
+      95:   { M34: 0.56,  M111: 0.50,  M12: 0.54 },
+
+      120:  { M34: 0.47,  M111: 0.41,  M12: 0.45 },
+      150:  { M34: 0.41,  M111: 0.34,  M12: 0.39 },
+      185:  { M34: 0.37,  M111: 0.29,  M12: 0.35 },
+      240:  { M34: 0.33,  M111: 0.25,  M12: 0.31 },
+      300:  { M34: 0.31,  M111: 0.22,  M12: 0.29 },
+
+      400:  { M34: 0.29,  M111: 0.20,  M12: 0.27 },
+      500:  { M34: 0.28,  M111: 0.185, M12: 0.26 },
+      630:  { M34: 0.27,  M111: 0.175, M12: 0.25 },
+      800:  { M34: null,  M111: 0.165, M12: 0.25 },
+      1000: { M34: null,  M111: 0.160, M12: 0.24 }
+    };
+
+    // Three-phase a.c. (3 or 4 cables) → columns 6,7,8,9
+    const T4D1B_Z_TP = {
+      // sizes 1–16: single z values shown
+      1:    { M34: 38.0,  MTRE: 38.0,  MFLT: 38.0,  M12FS: 38.0 },
+      1.5:  { M34: 25.0,  MTRE: 25.0,  MFLT: 25.0,  M12FS: 25.0 },
+      2.5:  { M34: 15.0,  MTRE: 15.0,  MFLT: 15.0,  M12FS: 15.0 },
+      4:    { M34: 9.5,   MTRE: 9.5,   MFLT: 9.5,  M12FS: 9.5 },
+      6:    { M34: 6.4,   MTRE: 6.4,   MFLT: 6.4,  M12FS: 6.4 },
+      10:   { M34: 3.8,   MTRE: 3.8,   MFLT: 3.8,  M12FS: 3.8 },
+      16:   { M34: 2.4,   MTRE: 2.4,   MFLT: 2.4,  M12FS: 2.4 },
+
+      // sizes 25+ : z from r/x/z blocks
+      25:   { M34: 1.55,  MTRE: 1.50,  MFLT: 1.55, M12FS: 1.55 },
+      35:   { M34: 1.10,  MTRE: 1.10,  MFLT: 1.10, M12FS: 1.15 },
+      50:   { M34: 0.85,  MTRE: 0.82,  MFLT: 0.84, M12FS: 0.86 },
+      70:   { M34: 0.61,  MTRE: 0.57,  MFLT: 0.60, M12FS: 0.63 },
+      95:   { M34: 0.48,  MTRE: 0.43,  MFLT: 0.47, M12FS: 0.51 },
+
+      120:  { M34: 0.41,  MTRE: 0.36,  MFLT: 0.40, M12FS: 0.44 },
+      150:  { M34: 0.36,  MTRE: 0.30,  MFLT: 0.34, M12FS: 0.40 },
+      185:  { M34: 0.32,  MTRE: 0.26,  MFLT: 0.31, M12FS: 0.36 },
+      240:  { M34: 0.29,  MTRE: 0.22,  MFLT: 0.27, M12FS: 0.34 },
+      300:  { M34: 0.27,  MTRE: 0.190, MFLT: 0.25, M12FS: 0.32 },
+
+      400:  { M34: 0.25,  MTRE: 0.175, MFLT: 0.24, M12FS: 0.31 },
+      500:  { M34: 0.25,  MTRE: 0.160, MFLT: 0.23, M12FS: 0.30 },
+      630:  { M34: 0.24,  MTRE: 0.150, MFLT: 0.22, M12FS: 0.29 },
+      800:  { M34: null,  MTRE: 0.145, MFLT: 0.22, M12FS: 0.29 },
+      1000: { M34: null,  MTRE: 0.140, MFLT: 0.21, M12FS: 0.28 }
+    };
+
+    // =========================
+    // TABLE 4D1A (your screenshot)
+    // Iz (A) Reference Method 1 clipped direct: col 6 + col 7
+    // =========================
+    const TABLE_4D1A_IZ = {
+      1:    { _2CSP: 15.5,  _3C3P: 14 },
+      1.5:  { _2CSP: 20,    _3C3P: 18 },
+      2.5:  { _2CSP: 27,    _3C3P: 25 },
+      4:    { _2CSP: 37,    _3C3P: 33 },
+      6:    { _2CSP: 47,    _3C3P: 43 },
+      10:   { _2CSP: 65,    _3C3P: 59 },
+      16:   { _2CSP: 87,    _3C3P: 79 },
+      25:   { _2CSP: 114,   _3C3P: 104 },
+      35:   { _2CSP: 141,   _3C3P: 129 },
+      50:   { _2CSP: 182,   _3C3P: 167 },
+      70:   { _2CSP: 234,   _3C3P: 214 },
+      95:   { _2CSP: 284,   _3C3P: 261 },
+      120:  { _2CSP: 330,   _3C3P: 303 },
+      150:  { _2CSP: 381,   _3C3P: 349 },
+      185:  { _2CSP: 436,   _3C3P: 400 },
+      240:  { _2CSP: 515,   _3C3P: 472 },
+      300:  { _2CSP: 594,   _3C3P: 545 },
+      400:  { _2CSP: 694,   _3C3P: 634 },
+      500:  { _2CSP: 792,   _3C3P: 723 },
+      630:  { _2CSP: 904,   _3C3P: 826 },
+      800:  { _2CSP: 1030,  _3C3P: 943 },
+      1000: { _2CSP: 1154,  _3C3P: 1058 }
+    };
+
+    function allSizes() {
+      return Object.keys(T4D1B_Z_SP).map(Number).sort((a,b)=>a-b);
     }
-    function fmt(x, dp=3) {
-      if (!Number.isFinite(x)) return "—";
-      return x.toFixed(dp);
+
+    function populateCableSelect(selId, defaultVal) {
+      const sel = $(selId);
+      sel.innerHTML = "";
+      for (const size of allSizes()) {
+        const opt = document.createElement("option");
+        opt.value = String(size);
+        opt.textContent = `${size} mm²`;
+        if (Number(size) === Number(defaultVal)) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    function setMethodOptions() {
+      const arr = $("arrZs").value;
+      const m = $("vdMethod");
+      const current = m.value;
+
+      m.innerHTML = "";
+
+      if (arr === "SP") {
+        // Single-phase options
+        const opts = [
+          ["M34",  "Methods 3 & 4 (enclosed in conduit etc.)"],
+          ["M111", "Methods 1 & 11 (clipped direct / on tray, touching)"],
+          ["M12",  "Method 12 (spaced)"]
+        ];
+        for (const [val, txt] of opts) {
+          const o = document.createElement("option");
+          o.value = val;
+          o.textContent = txt;
+          m.appendChild(o);
+        }
+        m.value = (current && ["M34","M111","M12"].includes(current)) ? current : "M111";
+      } else {
+        // Three-phase options (cols 6–9)
+        const opts = [
+          ["M34",   "Methods 3 & 4 (enclosed in conduit etc.)"],
+          ["MTRE",  "Methods 1, 11 & 12 (in trefoil)"],
+          ["MFLT",  "Methods 1 & 11 (flat and touching)"],
+          ["M12FS", "Method 12 (flat spaced)"]
+        ];
+        for (const [val, txt] of opts) {
+          const o = document.createElement("option");
+          o.value = val;
+          o.textContent = txt;
+          m.appendChild(o);
+        }
+        m.value = (current && ["M34","MTRE","MFLT","M12FS"].includes(current)) ? current : "MTRE";
+      }
+    }
+
+    // --- MCB instantaneous multipliers (IEC 60898 typical bands)
+    const MCB_MULT = {
+      "B": { min: 3, max: 5 },
+      "C": { min: 5, max: 10 },
+      "D": { min: 10, max: 20 }
+    };
+
+    function populateMcbIn() {
+      const ratings = [6,10,13,16,20,25,32,40,50,63];
+      const sel = $("mcbIn");
+      sel.innerHTML = "";
+      for (const r of ratings) {
+        const opt = document.createElement("option");
+        opt.value = String(r);
+        opt.textContent = `${r} A`;
+        if (r === 32) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    function getIaUsed() {
+      const type = $("mcbType").value;
+      const In = n($("mcbIn").value);
+      const mult = MCB_MULT[type];
+      const iaMin = mult.min * In;
+      const iaMax = mult.max * In;
+      const iaMid = ((mult.min + mult.max) / 2) * In;
+
+      const mode = $("iaMode").value;
+      if (mode === "min") return iaMin;
+      if (mode === "mid") return iaMid;
+      if (mode === "custom") return n($("iaCustom").value);
+      return iaMax; // conservative
+    }
+
+    function updateMcbInfo() {
+      const type = $("mcbType").value;
+      const In = n($("mcbIn").value);
+      const mult = MCB_MULT[type];
+      const iaMin = mult.min * In;
+      const iaMax = mult.max * In;
+      const iaUsed = getIaUsed();
+
+      $("mcbInfo").textContent =
+        `Instantaneous band: ${mult.min}×In to ${mult.max}×In → ${fmt(iaMin,1)} A to ${fmt(iaMax,1)} A. ` +
+        `Ia used: ${fmt(iaUsed,1)} A.`;
     }
 
     function showCards() {
@@ -111,8 +395,101 @@
       $("tnsCard").style.display = (sys === "TNS") ? "" : "none";
       $("ttCard").style.display  = (sys === "TT")  ? "" : "none";
     }
-    $("system").addEventListener("change", showCards);
+
+    function getZmv(lineSize, methodKey) {
+      const arr = $("arrZs").value;
+      const table = (arr === "SP") ? T4D1B_Z_SP : T4D1B_Z_TP;
+      const row = table[lineSize];
+      if (!row) return NaN;
+      const v = row[methodKey];
+      return (v === null || v === undefined) ? NaN : Number(v);
+    }
+
+    function loopOhmsFrom4D1B(lineSize, cpcSize, methodKey, Lm) {
+      const z = getZmv(lineSize, methodKey);
+      if (!Number.isFinite(z)) return NaN;
+
+      const arr = $("arrZs").value;
+
+      if (arr === "SP") {
+        // SP table z is for 2 cables (loop-like). Equal sizes → loop z.
+        if (Number(lineSize) === Number(cpcSize)) {
+          return (z * Lm) / 1000.0;
+        }
+        // Unequal sizes: split into per-conductor and scale ~1/S
+        const ZcondLine_mv = z / 2.0;
+        const K = ZcondLine_mv * Number(lineSize);
+        const ZcondCpc_mv = K / Number(cpcSize);
+        const Zloop_mv = ZcondLine_mv + ZcondCpc_mv;
+        return (Zloop_mv * Lm) / 1000.0;
+      }
+
+      // TP table z is 3-phase voltage drop basis. Convert to per-phase-conductor equivalent:
+      // z_phase ≈ z / √3  (mV/A/m). Then loop(Line + CPC) uses ZcondLine + ZcondCpc.
+      const ZcondLine_mv = (z / SQRT3); // treat as single conductor contribution
+      const K = ZcondLine_mv * Number(lineSize);
+      const ZcondCpc_mv = (Number(lineSize) === Number(cpcSize)) ? ZcondLine_mv : (K / Number(cpcSize));
+      const Zloop_mv = ZcondLine_mv + ZcondCpc_mv;
+      return (Zloop_mv * Lm) / 1000.0;
+    }
+
+    function updateCableInfo() {
+      const L = n($("len").value);
+      const lineSize = n($("lineSize").value);
+      const cpcSize  = n($("cpcSize").value);
+      const methodKey = $("vdMethod").value;
+
+      const zLine = getZmv(lineSize, methodKey);
+      const loopOhm = loopOhmsFrom4D1B(lineSize, cpcSize, methodKey, L);
+
+      const arr = $("ccaArrangement").value;
+      const izRow = TABLE_4D1A_IZ[lineSize];
+      const Iz = izRow ? (arr === "2CSP" ? izRow._2CSP : izRow._3C3P) : NaN;
+
+      const loadA = $("loadA").value.trim() === "" ? NaN : n($("loadA").value);
+      const izCheck = (Number.isFinite(loadA) && Number.isFinite(Iz))
+        ? (loadA <= Iz ? "PASS ✅ (Ib ≤ Iz)" : "FAIL ❌ (Ib > Iz)")
+        : "—";
+
+      const arrZs = $("arrZs").value;
+      const zMsg = (arrZs === "SP")
+        ? `4D1B z (SP) for line ${lineSize}mm² = ${fmt(zLine,3)} mV/A/m.`
+        : `4D1B z (3φ) for line ${lineSize}mm² = ${fmt(zLine,3)} mV/A/m (converted by ÷√3 for Zs loop).`;
+
+      let msg = `${zMsg} (R1+R2) ≈ ${fmt(loopOhm,4)} Ω for L=${fmt(L,1)} m`;
+      if (lineSize !== cpcSize) msg += ` (Line≠CPC approximation).`;
+      msg += `\n4D1A Iz (Ref Method 1) for ${lineSize}mm² = ${fmt(Iz,1)} A. Iz check: ${izCheck}`;
+
+      $("cableInfo").textContent = msg;
+    }
+
+    // Init
+    populateCableSelect("lineSize", 4);
+    populateCableSelect("cpcSize", 4);
+    populateMcbIn();
     showCards();
+    setMethodOptions();
+    updateMcbInfo();
+    updateCableInfo();
+
+    // Events
+    $("system").addEventListener("change", showCards);
+
+    $("arrZs").addEventListener("change", () => {
+      setMethodOptions();
+      updateCableInfo();
+    });
+    $("vdMethod").addEventListener("change", updateCableInfo);
+    $("ccaArrangement").addEventListener("change", updateCableInfo);
+    $("lineSize").addEventListener("change", updateCableInfo);
+    $("cpcSize").addEventListener("change", updateCableInfo);
+    $("len").addEventListener("input", updateCableInfo);
+    $("loadA").addEventListener("input", updateCableInfo);
+
+    $("mcbType").addEventListener("change", updateMcbInfo);
+    $("mcbIn").addEventListener("change", updateMcbInfo);
+    $("iaMode").addEventListener("change", updateMcbInfo);
+    $("iaCustom").addEventListener("input", updateMcbInfo);
 
     $("calcBtn").addEventListener("click", () => {
       const sys = $("system").value;
@@ -123,25 +500,73 @@
 
       if (sys === "TNS") {
         const Ze = n($("ze").value);
-        const R1 = n($("r1").value);
-        const R2 = n($("r2").value);
-        const Ia = n($("ia").value);
+        const L = n($("len").value);
+        const lineSize = n($("lineSize").value);
+        const cpcSize  = n($("cpcSize").value);
+        const methodKey = $("vdMethod").value;
+        const arrZs = $("arrZs").value;
 
-        const Zs = Ze + (R1 + R2);
+        const ov = $("loopOverride").value.trim();
+        const loopOhm = (ov !== "") ? n(ov) : loopOhmsFrom4D1B(lineSize, cpcSize, methodKey, L);
+
+        const Zs = Ze + loopOhm;
         const If = U0 / Zs;
-        const Ut = If * R2; // simple estimate: PE rise = If * R2
 
+        const Ia = getIaUsed();
         const Zs_max = U0 / Ia;
         const pass = Zs <= Zs_max;
 
+        const type = $("mcbType").value;
+        const In = n($("mcbIn").value);
+        const mult = MCB_MULT[type];
+        const instMin = mult.min * In;
+        const instMax = mult.max * In;
+
+        const instMsg =
+          (If >= instMin)
+            ? (If <= instMax ? "Within instantaneous band (likely magnetic trip)." : "Above instantaneous band (definitely magnetic trip).")
+            : "Below instantaneous band (may trip thermally; verify disconnection time).";
+
+        const arr = $("ccaArrangement").value;
+        const izRow = TABLE_4D1A_IZ[lineSize];
+        const Iz = izRow ? (arr === "2CSP" ? izRow._2CSP : izRow._3C3P) : NaN;
+
+        const loadA = $("loadA").value.trim() === "" ? NaN : n($("loadA").value);
+        const izCheck = (Number.isFinite(loadA) && Number.isFinite(Iz))
+          ? (loadA <= Iz ? "PASS ✅ (Ib ≤ Iz)" : "FAIL ❌ (Ib > Iz)")
+          : "—";
+
         text += `System: TN-S\n`;
-        text += `Zs = Ze + (R1+R2) = ${fmt(Zs,4)} Ω\n`;
-        text += `If = U0 / Zs = ${fmt(If,1)} A\n`;
-        text += `Touch voltage estimate Ut ≈ If × R2 = ${fmt(Ut,1)} V\n\n`;
-        text += `ADS check (needs correct Ia for device):\n`;
-        text += `Zs_max = U0 / Ia = ${fmt(Zs_max,4)} Ω\n`;
-        text += `Result: ${pass ? "PASS ✅" : "FAIL ❌"}\n`;
-        text += `Note: Ut here is a simplified estimate; real Ut depends on parallel earth paths, bonding, and fault location.`;
+        text += `Inputs:\n`;
+        text += `  U0 = ${fmt(U0,1)} V\n`;
+        text += `  Ze = ${fmt(Ze,4)} Ω\n`;
+        text += `  Length L = ${fmt(L,1)} m (one-way)\n`;
+        text += `  Arrangement for Zs = ${arrZs === "SP" ? "Single-phase (2 cables)" : "Three-phase (3/4 cables)"}\n`;
+        text += `  Cable sizes: Line ${lineSize}mm², CPC ${cpcSize}mm²\n`;
+        text += `  (R1+R2) ≈ ${fmt(loopOhm,4)} Ω ${ov!=="" ? "(override)" : "(from 4D1B)"}\n\n`;
+
+        text += `Calculated:\n`;
+        text += `  Zs = Ze + (R1+R2) = ${fmt(Zs,4)} Ω\n`;
+        text += `  If = U0 / Zs = ${fmt(If,1)} A\n\n`;
+
+        text += `MCB:\n`;
+        text += `  Type ${type}, In ${fmt(In,0)} A\n`;
+        text += `  Instantaneous band: ${fmt(instMin,1)} A to ${fmt(instMax,1)} A\n`;
+        text += `  If assessment: ${instMsg}\n\n`;
+
+        text += `ADS check (Zs ≤ U0/Ia):\n`;
+        text += `  Ia used = ${fmt(Ia,1)} A\n`;
+        text += `  Zs_max = U0 / Ia = ${fmt(Zs_max,4)} Ω\n`;
+        text += `  Result: ${pass ? "PASS ✅" : "FAIL ❌"}\n\n`;
+
+        text += `4D1A Iz (Ref Method 1 clipped direct):\n`;
+        text += `  Iz(${arr}) for ${lineSize}mm² = ${fmt(Iz,1)} A\n`;
+        text += `  Load current check: ${izCheck}\n\n`;
+
+        text += `Notes:\n`;
+        text += `  • 3φ Zs estimation converts 4D1B 3φ mV/A/m to phase basis by ÷√3 (approximation).\n`;
+        text += `  • If Line≠CPC, 1/S scaling is an engineering approximation.\n`;
+        text += `  • If If is below instantaneous band, verify disconnection time.\n`;
       }
 
       if (sys === "TT") {
@@ -150,18 +575,18 @@
         const RB = n($("rb").value);
         const Zline = n($("zline").value);
 
-        const U_earth = RA * Idn; // RCD touch voltage check proxy
+        const U_earth = RA * Idn;
         const pass = U_earth <= Ulimit;
 
         const If_est = U0 / (RA + RB + Zline);
-        const Ut_est = If_est * RA; // electrode rise approx
+        const Ut_est = If_est * RA;
 
         text += `System: TT\n`;
-        text += `RCD safety condition: RA × IΔn ≤ ${Ulimit}V\n`;
-        text += `RA × IΔn = ${fmt(U_earth,1)} V  → ${pass ? "PASS ✅" : "FAIL ❌"}\n\n`;
+        text += `RCD condition: RA × IΔn ≤ ${fmt(Ulimit,1)} V\n`;
+        text += `  RA × IΔn = ${fmt(U_earth,1)} V  → ${pass ? "PASS ✅" : "FAIL ❌"}\n\n`;
         text += `Fault current estimate (optional):\n`;
-        text += `If ≈ U0 / (RA + RB + Zline) = ${fmt(If_est,2)} A\n`;
-        text += `Earth electrode rise (approx) Ut ≈ If × RA = ${fmt(Ut_est,1)} V\n`;
+        text += `  If ≈ U0 / (RA + RB + Zline) = ${fmt(If_est,2)} A\n`;
+        text += `  Electrode rise Ut ≈ If × RA = ${fmt(Ut_est,1)} V\n\n`;
         text += `Note: TT protection is normally by RCD; overcurrent devices alone usually won’t clear earth faults fast enough.`;
       }
 
