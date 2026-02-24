@@ -1,10 +1,14 @@
 {
-  "name": "Earth Fault Calculator",
+  "name": "Earth Fault Calculator (TT / TN-S)",
   "short_name": "EF Calc",
-  "start_url": ".",
+  "id": "/earthfault-pwa/",
+  "start_url": "./?source=pwa",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#111111",
+  "description": "Earth fault & Zs estimation for TT and TN-S using SS638 Table 4D1A/4D1B data.",
   "icons": [
     {
       "src": "icon-192.png",
