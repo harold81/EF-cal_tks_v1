@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Earth Fault Calculator (TT / TN-S)</title>
+  <meta name="theme-color" content="#111111" />
+  <link rel="manifest" href="manifest.webmanifest">
+  <style>
+    body { font-family: -apple-system, system-ui, Arial; margin: 16px; line-height: 1.25; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 12px 0; }
+    label { display:block; font-size: 14px; margin: 10px 0 6px; }
+    input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; }
+    button { width: 100%; padding: 12px; border: 0; border-radius: 12px; font-size: 16px; margin-top: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .small { font-size: 13px; color: #444; }
+    .out { font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; background:#fafafa; padding: 12px; border-radius: 10px; border:1px solid #eee; }
+  </style>
+</head>
+<body>
+  <h2>Earth Fault Calculator</h2>
+  <div class="small">TT / TN-S • Fault current, touch voltage estimate, basic checks</div>
+
+  <div class="card">
+    <label>Earthing system</label>
+    <select id="system">
+      <option value="TNS">TN-S</option>
+      <option value="TT">TT</option>
+    </select>
+
+    <div class="row">
+      <div>
+        <label>U0 (V) phase-to-earth</label>
+        <input id="u0" type="number" step="0.1" value="230">
+      </div>
+      <div>
+        <label>50V limit (V)</label>
+        <input id="ulimit" type="number" step="0.1" value="50">
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="tnsCard">
+    <h3 style="margin:0 0 6px;">TN-S inputs</h3>
+    <label>Ze (Ω) external loop impedance</label>
+    <input id="ze" type="number" step="0.001" value="0.20">
+
+    <div class="row">
+      <div>
+        <label>R1 (Ω) line conductor</label>
+        <input id="r1" type="number" step="0.001" value="0.10">
+      </div>
+      <div>
+        <label>R2 (Ω) CPC/PE conductor</label>
+        <input id="r2" type="number" step="0.001" value="0.10">
+      </div>
+    </div>
+
+    <label>Ia (A) required trip current (MCB/CB setting)</label>
+    <input id="ia" type="number" step="0.1" value="250">
+    <div class="small">If unsure: for an MCB you’d normally derive Ia from its curve (B/C/D). This field lets you plug the correct Ia once known.</div>
+  </div>
+
+  <div class="card" id="ttCard" style="display:none;">
+    <h3 style="margin:0 0 6px;">TT inputs</h3>
+    <label>RA (Ω) installation earth electrode resistance</label>
+    <input id="ra" type="number" step="0.1" value="10">
+
+    <label>RCD IΔn (A)</label>
+    <input id="idn" type="number" step="0.001" value="0.03">
+
+    <div class="row">
+      <div>
+        <label>RB (Ω) supply earth electrode (optional)</label>
+        <input id="rb" type="number" step="0.1" value="1">
+      </div>
+      <div>
+        <label>Zline (Ω) line+PE conductor (optional)</label>
+        <input id="zline" type="number" step="0.001" value="0.00">
+      </div>
+    </div>
+    <div class="small">TT fault current is often limited by RA (and RB). If you don’t know Zline, leave it at 0 for a rough estimate.</div>
+  </div>
+
+  <button id="calcBtn">Calculate</button>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px;">Results</h3>
+    <div id="out" class="out">—</div>
+  </div>
+
+  <script>
+    // Register service worker (offline)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(()=>{});
+    }
+
+    const $ = (id) => document.getElementById(id);
+
+    function n(v) {
+      const x = Number(v);
+      return Number.isFinite(x) ? x : NaN;
+    }
+    function fmt(x, dp=3) {
+      if (!Number.isFinite(x)) return "—";
+      return x.toFixed(dp);
+    }
+
+    function showCards() {
+      const sys = $("system").value;
+      $("tnsCard").style.display = (sys === "TNS") ? "" : "none";
+      $("ttCard").style.display  = (sys === "TT")  ? "" : "none";
+    }
+    $("system").addEventListener("change", showCards);
+    showCards();
+
+    $("calcBtn").addEventListener("click", () => {
+      const sys = $("system").value;
+      const U0 = n($("u0").value);
+      const Ulimit = n($("ulimit").value);
+
+      let text = "";
+
+      if (sys === "TNS") {
+        const Ze = n($("ze").value);
+        const R1 = n($("r1").value);
+        const R2 = n($("r2").value);
+        const Ia = n($("ia").value);
+
+        const Zs = Ze + (R1 + R2);
+        const If = U0 / Zs;
+        const Ut = If * R2; // simple estimate: PE rise = If * R2
+
+        const Zs_max = U0 / Ia;
+        const pass = Zs <= Zs_max;
+
+        text += `System: TN-S\n`;
+        text += `Zs = Ze + (R1+R2) = ${fmt(Zs,4)} Ω\n`;
+        text += `If = U0 / Zs = ${fmt(If,1)} A\n`;
+        text += `Touch voltage estimate Ut ≈ If × R2 = ${fmt(Ut,1)} V\n\n`;
+        text += `ADS check (needs correct Ia for device):\n`;
+        text += `Zs_max = U0 / Ia = ${fmt(Zs_max,4)} Ω\n`;
+        text += `Result: ${pass ? "PASS ✅" : "FAIL ❌"}\n`;
+        text += `Note: Ut here is a simplified estimate; real Ut depends on parallel earth paths, bonding, and fault location.`;
+      }
+
+      if (sys === "TT") {
+        const RA = n($("ra").value);
+        const Idn = n($("idn").value);
+        const RB = n($("rb").value);
+        const Zline = n($("zline").value);
+
+        const U_earth = RA * Idn; // RCD touch voltage check proxy
+        const pass = U_earth <= Ulimit;
+
+        const If_est = U0 / (RA + RB + Zline);
+        const Ut_est = If_est * RA; // electrode rise approx
+
+        text += `System: TT\n`;
+        text += `RCD safety condition: RA × IΔn ≤ ${Ulimit}V\n`;
+        text += `RA × IΔn = ${fmt(U_earth,1)} V  → ${pass ? "PASS ✅" : "FAIL ❌"}\n\n`;
+        text += `Fault current estimate (optional):\n`;
+        text += `If ≈ U0 / (RA + RB + Zline) = ${fmt(If_est,2)} A\n`;
+        text += `Earth electrode rise (approx) Ut ≈ If × RA = ${fmt(Ut_est,1)} V\n`;
+        text += `Note: TT protection is normally by RCD; overcurrent devices alone usually won’t clear earth faults fast enough.`;
+      }
+
+      $("out").textContent = text;
+    });
+  </script>
+</body>
+</html>
